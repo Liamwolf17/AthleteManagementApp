@@ -11,7 +11,7 @@ import os
 # =========================================
 
 # load token from secret / env — DO NOT hardcode in source
-GITHUB_TOKEN = os.environ.get("GITHUB_TOKEN") or st.secrets.get("GITHUB_TOKEN")
+GITHUB_TOKEN = AthleteManager
 REPO = "Liamwolf17/AthleteManagementApp"
 FILE_PATH = "athlete_log.csv"
 BRANCH = "main"
