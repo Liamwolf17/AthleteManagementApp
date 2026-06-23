@@ -1,120 +1,697 @@
+```python
 import streamlit as st
 import pandas as pd
 import base64
 import requests
-from datetime import date
+from datetime import date, timedelta
 from io import StringIO
-import os
 
-# =========================================
-# GITHUB CONFIG
-# =========================================
+# =====================================================
+# CONFIG
+# =====================================================
 
-# load token from secret / env — DO NOT hardcode in source
+st.set_page_config(
+    page_title="Athlete Management App",
+    layout="wide"
+)
+
 GITHUB_TOKEN = st.secrets.get("GITHUB_TOKEN", "")
+
 REPO = "Liamwolf17/AthleteManagementApp"
 FILE_PATH = "athlete_log.csv"
 BRANCH = "main"
 
 API_URL = f"https://api.github.com/repos/{REPO}/contents/{FILE_PATH}"
 
-# =========================================
-# FUNCTIONS
-# =========================================
+# Garmin Credentials
+GARMIN_EMAIL = st.secrets.get("GARMIN_EMAIL", "")
+GARMIN_PASSWORD = st.secrets.get("GARMIN_PASSWORD", "")
+
+# =====================================================
+# GITHUB FUNCTIONS
+# =====================================================
 
 def get_existing_csv():
-    if not GITHUB_TOKEN:
-        st.warning("No GitHub token configured — running in read-only mode.")
+
     headers = {}
+
     if GITHUB_TOKEN:
         headers["Authorization"] = f"token {GITHUB_TOKEN}"
 
     r = requests.get(API_URL, headers=headers)
+
     if r.status_code == 200:
+
         content = r.json().get("content", "")
-        decoded = base64.b64decode(content).decode("utf-8")
+
+        decoded = base64.b64decode(
+            content
+        ).decode("utf-8")
+
         try:
-            return pd.read_csv(StringIO(decoded))
+
+            return pd.read_csv(
+                StringIO(decoded)
+            )
+
         except pd.errors.EmptyDataError:
-            st.warning("Athlete log file is empty.")
+
             return pd.DataFrame()
-    else:
-        st.write(f"GET {API_URL} returned {r.status_code}: {r.text}")
+
     return pd.DataFrame()
 
 
 def push_csv_to_github(df):
-    if not GITHUB_TOKEN:
-        st.error("❌ No GitHub token configured; cannot push to GitHub. Check your Streamlit secrets.")
-        return False  # Return False to indicate failure
 
-    csv_data = df.to_csv(index=False)
-    b64_content = base64.b64encode(csv_data.encode()).decode()
+    if not GITHUB_TOKEN:
+
+        st.error(
+            "No GitHub token configured."
+        )
+
+        return False
+
+    csv_data = df.to_csv(
+        index=False
+    )
+
+    b64_content = base64.b64encode(
+        csv_data.encode()
+    ).decode()
 
     headers = {
-        "Authorization": f"token {GITHUB_TOKEN}",
-        "Accept": "application/vnd.github.v3+json"
+        "Authorization":
+            f"token {GITHUB_TOKEN}",
+        "Accept":
+            "application/vnd.github.v3+json"
     }
 
-    # Get SHA if file exists
-    r = requests.get(API_URL, headers=headers)
     sha = None
+
+    r = requests.get(
+        API_URL,
+        headers=headers
+    )
+
     if r.status_code == 200:
+
         sha = r.json().get("sha")
 
     payload = {
-        "message": f"Update athlete log {date.today()}",
-        "content": b64_content,
-        "branch": BRANCH
+
+        "message":
+            f"Update athlete log {date.today()}",
+
+        "content":
+            b64_content,
+
+        "branch":
+            BRANCH
     }
+
     if sha:
+
         payload["sha"] = sha
 
-    r = requests.put(API_URL, json=payload, headers=headers)
+    r = requests.put(
+        API_URL,
+        json=payload,
+        headers=headers
+    )
+
     if r.status_code not in [200, 201]:
-        st.error(f"❌ GitHub upload failed ({r.status_code}): {r.text}")
+
+        st.error(
+            f"GitHub upload failed:\n{r.text}"
+        )
+
         return False
-    else:
-        st.success("✅ Saved to GitHub!")
-        return True
+
+    return True
 
 
-# =========================================
-# MAIN APP
-# =========================================
+# =====================================================
+# GARMIN FUNCTIONS
+# =====================================================
 
-st.title("Athlete Management App")
+@st.cache_data(ttl=3600)
+def get_garmin_data():
 
-# Load existing data
+    if not GARMIN_EMAIL or not GARMIN_PASSWORD:
+
+        return {}
+
+    try:
+
+        from garminconnect import Garmin
+
+        client = Garmin(
+            GARMIN_EMAIL,
+            GARMIN_PASSWORD
+        )
+
+        client.login()
+
+        target_date = (
+            date.today()
+            - timedelta(days=1)
+        )
+
+        date_str = target_date.strftime(
+            "%Y-%m-%d"
+        )
+
+        stats = client.get_stats(
+            date_str
+        )
+
+        sleep = client.get_sleep_data(
+            date_str
+        )
+
+        garmin = {
+
+            "Steps":
+                stats.get("totalSteps"),
+
+            "Distance":
+                stats.get("totalDistance"),
+
+            "Calories":
+                stats.get(
+                    "totalKilocalories"
+                ),
+
+            "RestingHR":
+                stats.get(
+                    "restingHeartRate"
+                ),
+
+            "SleepHours":
+                sleep.get(
+                    "dailySleepDTO",
+                    {}
+                ).get(
+                    "sleepTimeSeconds",
+                    0
+                ) / 3600
+        }
+
+        # -------------------------
+        # Optional Metrics
+        # -------------------------
+
+        try:
+
+            stress = client.get_stress_data(
+                date_str
+            )
+
+            stress_values = [
+
+                x
+
+                for x in stress.get(
+                    "stressValuesArray",
+                    []
+                )
+
+                if isinstance(
+                    x,
+                    (int, float)
+                )
+
+                and x >= 0
+            ]
+
+            if stress_values:
+
+                garmin["AvgStress"] = (
+                    sum(stress_values)
+                    /
+                    len(stress_values)
+                )
+
+                garmin["MaxStress"] = (
+                    max(stress_values)
+                )
+
+        except:
+
+            pass
+
+        try:
+
+            body_battery = (
+                client.get_body_battery(
+                    date_str
+                )
+            )
+
+            values = [
+
+                x
+
+                for x in body_battery.get(
+                    "bodyBatteryValuesArray",
+                    []
+                )
+
+                if isinstance(
+                    x,
+                    (int, float)
+                )
+            ]
+
+            if values:
+
+                garmin[
+                    "BodyBatteryStart"
+                ] = values[0]
+
+                garmin[
+                    "BodyBatteryEnd"
+                ] = values[-1]
+
+        except:
+
+            pass
+
+        try:
+
+            summary = (
+                client.get_user_summary(
+                    date_str
+                )
+            )
+
+            garmin["VO2Max"] = (
+                summary.get(
+                    "vo2MaxPreciseValue"
+                )
+            )
+
+        except:
+
+            pass
+
+        return garmin
+
+    except Exception as e:
+
+        st.warning(
+            f"Garmin sync failed: {e}"
+        )
+
+        return {}
+
+
+# =====================================================
+# LOAD DATA
+# =====================================================
+
 df = get_existing_csv()
 
-# Display current data
+# =====================================================
+# HEADER
+# =====================================================
+
+st.title(
+    "🏆 Athlete Management App"
+)
+
+# =====================================================
+# YESTERDAY'S FOCUS
+# =====================================================
+
+st.header(
+    "🎯 Yesterday's Focus"
+)
+
 if not df.empty:
-    st.subheader("Current Athlete Log")
-    st.dataframe(df)
-else:
-    st.info("No athlete log found. Start adding entries below.")
 
-# Add new entry
-st.subheader("Add New Entry")
-col1, col2, col3 = st.columns(3)
-with col1:
-    athlete_name = st.text_input("Athlete Name")
-with col2:
-    entry_date = st.date_input("Date")
-with col3:
-    performance = st.text_input("Performance/Notes")
+    try:
 
-# Update button logic:
-if st.button("Add Entry"):
-    if athlete_name and performance:
-        new_entry = pd.DataFrame([{
-            "Athlete": athlete_name,
-            "Date": entry_date,
-            "Performance": performance
-        }])
-        df = pd.concat([df, new_entry], ignore_index=True)
-        if push_csv_to_github(df):  # Only rerun if push succeeded
-            st.rerun()
-    else:
-        st.warning("Please fill in all fields.")
+        temp_df = df.copy()
+
+        temp_df["Date"] = pd.to_datetime(
+            temp_df["Date"]
+        )
+
+        yesterday = (
+            pd.Timestamp.today()
+            -
+            pd.Timedelta(days=1)
+        ).date()
+
+        yest = temp_df[
+            temp_df["Date"].dt.date
+            ==
+            yesterday
+        ]
+
+        if not yest.empty:
+
+            st.info(
+                yest.iloc[0][
+                    "TomorrowsFocus"
+                ]
+            )
+
+        else:
+
+            st.info(
+                "No focus recorded."
+            )
+
+    except:
+
+        pass
+
+# =====================================================
+# GARMIN METRICS
+# =====================================================
+
+st.header(
+    "⌚ Garmin Metrics"
+)
+
+garmin = get_garmin_data()
+
+if garmin:
+
+    c1, c2, c3, c4 = st.columns(4)
+
+    with c1:
+
+        st.metric(
+            "Steps",
+            garmin.get(
+                "Steps",
+                "-"
+            )
+        )
+
+    with c2:
+
+        st.metric(
+            "Sleep Hours",
+            round(
+                garmin.get(
+                    "SleepHours",
+                    0
+                ),
+                1
+            )
+        )
+
+    with c3:
+
+        st.metric(
+            "Resting HR",
+            garmin.get(
+                "RestingHR",
+                "-"
+            )
+        )
+
+    with c4:
+
+        st.metric(
+            "Calories",
+            garmin.get(
+                "Calories",
+                "-"
+            )
+        )
+
+# =====================================================
+# DAILY TRAINING FORM
+# =====================================================
+
+st.header(
+    "📝 Daily Training Log"
+)
+
+with st.form("training_log"):
+
+    num_sessions = st.number_input(
+        "Number of Sessions",
+        0,
+        10,
+        1
+    )
+
+    feel_before = st.slider(
+        "Feel Before Training",
+        1,
+        10,
+        5
+    )
+
+    feel_after = st.slider(
+        "Feel After Training",
+        1,
+        10,
+        5
+    )
+
+    mental_game = st.slider(
+        "Mental Game",
+        1,
+        10,
+        5
+    )
+
+    intensity = st.slider(
+        "Training Intensity",
+        1,
+        10,
+        5
+    )
+
+    focus = st.text_input(
+        "Today's Focus"
+    )
+
+    worked_well = st.text_area(
+        "What Worked Well?"
+    )
+
+    didnt_work = st.text_area(
+        "What Didn't Work?"
+    )
+
+    tomorrows_focus = st.text_area(
+        "Tomorrow's Focus"
+    )
+
+    submitted = st.form_submit_button(
+        "Save Entry"
+    )
+
+# =====================================================
+# SAVE ENTRY
+# =====================================================
+
+if submitted:
+
+    wellness_score = round(
+
+        (
+            feel_before
+            +
+            feel_after
+            +
+            mental_game
+            +
+            (11 - intensity)
+        )
+
+        / 4,
+
+        1
+    )
+
+    new_entry = pd.DataFrame([{
+
+        "Date":
+            str(date.today()),
+
+        "NumSessions":
+            num_sessions,
+
+        "FeelBefore":
+            feel_before,
+
+        "FeelAfter":
+            feel_after,
+
+        "MentalGame":
+            mental_game,
+
+        "Intensity":
+            intensity,
+
+        "Focus":
+            focus,
+
+        "WorkedWell":
+            worked_well,
+
+        "DidntWork":
+            didnt_work,
+
+        "TomorrowsFocus":
+            tomorrows_focus,
+
+        "WellnessScore":
+            wellness_score,
+
+        "Steps":
+            garmin.get("Steps"),
+
+        "Distance":
+            garmin.get("Distance"),
+
+        "Calories":
+            garmin.get("Calories"),
+
+        "RestingHR":
+            garmin.get("RestingHR"),
+
+        "SleepHours":
+            garmin.get("SleepHours"),
+
+        "AvgStress":
+            garmin.get("AvgStress"),
+
+        "MaxStress":
+            garmin.get("MaxStress"),
+
+        "BodyBatteryStart":
+            garmin.get(
+                "BodyBatteryStart"
+            ),
+
+        "BodyBatteryEnd":
+            garmin.get(
+                "BodyBatteryEnd"
+            ),
+
+        "VO2Max":
+            garmin.get(
+                "VO2Max"
+            )
+    }])
+
+    if not df.empty:
+
+        df = df[
+            df["Date"]
+            !=
+            str(date.today())
+        ]
+
+    df = pd.concat(
+        [df, new_entry],
+        ignore_index=True
+    )
+
+    if push_csv_to_github(df):
+
+        st.success(
+            "Entry saved!"
+        )
+
+        st.rerun()
+
+# =====================================================
+# DASHBOARD
+# =====================================================
+
+if not df.empty:
+
+    st.header(
+        "📈 Performance Trends"
+    )
+
+    plot_df = df.copy()
+
+    plot_df["Date"] = pd.to_datetime(
+        plot_df["Date"]
+    )
+
+    plot_df = plot_df.sort_values(
+        "Date"
+    )
+
+    c1, c2 = st.columns(2)
+
+    with c1:
+
+        st.subheader(
+            "Feeling Trends"
+        )
+
+        st.line_chart(
+            plot_df.set_index(
+                "Date"
+            )[[
+                "FeelBefore",
+                "FeelAfter",
+                "MentalGame"
+            ]]
+        )
+
+    with c2:
+
+        st.subheader(
+            "Recovery Trends"
+        )
+
+        cols = []
+
+        if "SleepHours" in plot_df:
+            cols.append(
+                "SleepHours"
+            )
+
+        if "RestingHR" in plot_df:
+            cols.append(
+                "RestingHR"
+            )
+
+        if cols:
+
+            st.line_chart(
+                plot_df.set_index(
+                    "Date"
+                )[cols]
+            )
+
+    st.subheader(
+        "Wellness Score"
+    )
+
+    if "WellnessScore" in plot_df:
+
+        st.line_chart(
+            plot_df.set_index(
+                "Date"
+            )[[
+                "WellnessScore"
+            ]]
+        )
+
+    st.subheader(
+        "Training History"
+    )
+
+    st.dataframe(
+        plot_df.sort_values(
+            "Date",
+            ascending=False
+        )
+    )
+```
