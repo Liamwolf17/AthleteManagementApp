@@ -13,7 +13,7 @@ REPO = "Liamwolf17/AthleteManagementApp"
 FILE_PATH = "athlete_log.csv"
 BRANCH = "main"
 
-API_URL = f"https://api.github.com/repos/{AthleteManagementApp}/contents/{athlete_log.csv}"
+API_URL = f"https://api.github.com/repos/AthleteManagementApp/contents/athlete_log.csv"
 
 # =========================================
 # FUNCTIONS
