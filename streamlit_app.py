@@ -45,8 +45,8 @@ def get_existing_csv():
 
 def push_csv_to_github(df):
     if not GITHUB_TOKEN:
-        st.error("No GitHub token configured; cannot push to GitHub.")
-        return
+        st.error("❌ No GitHub token configured; cannot push to GitHub. Check your Streamlit secrets.")
+        return False  # Return False to indicate failure
 
     csv_data = df.to_csv(index=False)
     b64_content = base64.b64encode(csv_data.encode()).decode()
@@ -72,9 +72,26 @@ def push_csv_to_github(df):
 
     r = requests.put(API_URL, json=payload, headers=headers)
     if r.status_code not in [200, 201]:
-        st.error(f"GitHub upload failed ({r.status_code}): {r.text}")
+        st.error(f"❌ GitHub upload failed ({r.status_code}): {r.text}")
+        return False
     else:
-        st.success("Saved to GitHub!")
+        st.success("✅ Saved to GitHub!")
+        return True
+
+
+# Update button logic:
+if st.button("Add Entry"):
+    if athlete_name and performance:
+        new_entry = pd.DataFrame([{
+            "Athlete": athlete_name,
+            "Date": entry_date,
+            "Performance": performance
+        }])
+        df = pd.concat([df, new_entry], ignore_index=True)
+        if push_csv_to_github(df):  # Only rerun if push succeeded
+            st.rerun()
+    else:
+        st.warning("Please fill in all fields.")
 
 
 # =========================================
