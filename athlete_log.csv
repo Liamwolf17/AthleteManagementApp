@@ -1,2 +1,2 @@
-Athlete,Date,Performance,NumSessions,FeelBefore,FeelAfter,MentalGame,Intensity,Focus,WorkedWell,DidntWork,TomorrowsFocus,WellnessScore,Steps,Distance,Calories,RestingHR,SleepHours,AvgStress,MaxStress,BodyBatteryStart,BodyBatteryEnd,VO2Max
-,2026-06-23,,1.0,5.0,5.0,5.0,5.0,test,test,test,test,5.2,,,,,,,,,,
+Athlete,Date,Performance,NumSessions,FeelBefore,FeelAfter,MentalGame,Intensity,Focus,WorkedWell,DidntWork,TomorrowsFocus,WellnessScore,Steps,Distance,Calories,RestingHR,SleepHours,AvgStress,MaxStress,BodyBatteryStart,BodyBatteryEnd,VO2Max,FeelBeforeNotes,FeelAfterNotes,MentalGameNotes
+,2026-06-23,,1.0,6.0,6.0,4.0,4.0,Softening up slide preparation ,Direct attack to lowlines ,"Pull on this type of opponent is difficult, need to force them to make an attack first ",None,5.8,,,,,0.0,,,,,,"Good, a little lethargic","Feeling okay,  not great, rushing a bit and not watching too much",Not focusing on the bout at hand - nothing particularly challenging 
