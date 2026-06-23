@@ -79,21 +79,6 @@ def push_csv_to_github(df):
         return True
 
 
-# Update button logic:
-if st.button("Add Entry"):
-    if athlete_name and performance:
-        new_entry = pd.DataFrame([{
-            "Athlete": athlete_name,
-            "Date": entry_date,
-            "Performance": performance
-        }])
-        df = pd.concat([df, new_entry], ignore_index=True)
-        if push_csv_to_github(df):  # Only rerun if push succeeded
-            st.rerun()
-    else:
-        st.warning("Please fill in all fields.")
-
-
 # =========================================
 # MAIN APP
 # =========================================
@@ -120,6 +105,7 @@ with col2:
 with col3:
     performance = st.text_input("Performance/Notes")
 
+# Update button logic:
 if st.button("Add Entry"):
     if athlete_name and performance:
         new_entry = pd.DataFrame([{
@@ -128,7 +114,9 @@ if st.button("Add Entry"):
             "Performance": performance
         }])
         df = pd.concat([df, new_entry], ignore_index=True)
-        push_csv_to_github(df)
-        st.rerun()
+        if push_csv_to_github(df):  # Only rerun if push succeeded
+            st.rerun()
+    else:
+        st.warning("Please fill in all fields.")
     else:
         st.warning("Please fill in all fields.")
