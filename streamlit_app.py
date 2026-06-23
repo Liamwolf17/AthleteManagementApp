@@ -72,3 +72,43 @@ def push_csv_to_github(df):
         st.error(f"GitHub upload failed ({r.status_code}): {r.text}")
     else:
         st.success("Saved to GitHub!")
+
+
+# =========================================
+# MAIN APP
+# =========================================
+
+st.title("Athlete Management App")
+
+# Load existing data
+df = get_existing_csv()
+
+# Display current data
+if not df.empty:
+    st.subheader("Current Athlete Log")
+    st.dataframe(df)
+else:
+    st.info("No athlete log found. Start adding entries below.")
+
+# Add new entry
+st.subheader("Add New Entry")
+col1, col2, col3 = st.columns(3)
+with col1:
+    athlete_name = st.text_input("Athlete Name")
+with col2:
+    entry_date = st.date_input("Date")
+with col3:
+    performance = st.text_input("Performance/Notes")
+
+if st.button("Add Entry"):
+    if athlete_name and performance:
+        new_entry = pd.DataFrame([{
+            "Athlete": athlete_name,
+            "Date": entry_date,
+            "Performance": performance
+        }])
+        df = pd.concat([df, new_entry], ignore_index=True)
+        push_csv_to_github(df)
+        st.rerun()
+    else:
+        st.warning("Please fill in all fields.")
