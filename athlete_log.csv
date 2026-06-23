@@ -1,2 +1,2 @@
-Athlete,Date,Performance
-test,2026-06-23,test
+Athlete,Date,Performance,NumSessions,FeelBefore,FeelAfter,MentalGame,Intensity,Focus,WorkedWell,DidntWork,TomorrowsFocus,WellnessScore,Steps,Distance,Calories,RestingHR,SleepHours,AvgStress,MaxStress,BodyBatteryStart,BodyBatteryEnd,VO2Max
+,2026-06-23,,1.0,5.0,5.0,5.0,5.0,test,test,test,test,5.2,,,,,,,,,,
