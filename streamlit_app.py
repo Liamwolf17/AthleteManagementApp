@@ -33,9 +33,12 @@ def get_existing_csv():
     if r.status_code == 200:
         content = r.json().get("content", "")
         decoded = base64.b64decode(content).decode("utf-8")
-        return pd.read_csv(StringIO(decoded))
+        try:
+            return pd.read_csv(StringIO(decoded))
+        except pd.errors.EmptyDataError:
+            st.warning("Athlete log file is empty.")
+            return pd.DataFrame()
     else:
-        # helpful debug info
         st.write(f"GET {API_URL} returned {r.status_code}: {r.text}")
     return pd.DataFrame()
 
