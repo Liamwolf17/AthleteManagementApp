@@ -1,4 +1,3 @@
-
 import streamlit as st
 import pandas as pd
 import base64
@@ -457,25 +456,46 @@ with st.form("training_log"):
         1
     )
 
-    feel_before = st.slider(
-        "Feel Before Training",
-        1,
-        10,
-        5
+    # Feel Before: integer score + short text note
+    feel_before = st.number_input(
+        "Feel Before Training (score)",
+        min_value=1,
+        max_value=10,
+        value=5,
+        step=1,
+        format="%d"
     )
 
-    feel_after = st.slider(
-        "Feel After Training",
-        1,
-        10,
-        5
+    feel_before_notes = st.text_input(
+        "Feel Before Notes"
     )
 
-    mental_game = st.slider(
-        "Mental Game",
-        1,
-        10,
-        5
+    # Feel After: integer score + short text note
+    feel_after = st.number_input(
+        "Feel After Training (score)",
+        min_value=1,
+        max_value=10,
+        value=5,
+        step=1,
+        format="%d"
+    )
+
+    feel_after_notes = st.text_input(
+        "Feel After Notes"
+    )
+
+    # Mental Game: integer score + short text note
+    mental_game = st.number_input(
+        "Mental Game (score)",
+        min_value=1,
+        max_value=10,
+        value=5,
+        step=1,
+        format="%d"
+    )
+
+    mental_game_notes = st.text_input(
+        "Mental Game Notes"
     )
 
     intensity = st.slider(
@@ -539,11 +559,20 @@ if submitted:
         "FeelBefore":
             feel_before,
 
+        "FeelBeforeNotes":
+            feel_before_notes,
+
         "FeelAfter":
             feel_after,
 
+        "FeelAfterNotes":
+            feel_after_notes,
+
         "MentalGame":
             mental_game,
+
+        "MentalGameNotes":
+            mental_game_notes,
 
         "Intensity":
             intensity,
@@ -709,4 +738,3 @@ if not df.empty:
             ascending=False
         )
     )
-
