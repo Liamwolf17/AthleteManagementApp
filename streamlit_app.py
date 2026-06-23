@@ -169,34 +169,49 @@ def get_garmin_data():
             date_str
         )
 
-        garmin = {
+        stats = client.get_stats(date_str)
 
-            "Steps":
-                stats.get("totalSteps"),
+sleep = client.get_sleep_data(date_str)
 
-            "Distance":
-                stats.get("totalDistance"),
+sleep_dto = sleep.get(
+    "dailySleepDTO",
+    {}
+)
 
-            "Calories":
-                stats.get(
-                    "totalKilocalories"
-                ),
+sleep_seconds = (
+    sleep_dto.get(
+        "sleepTimeSeconds"
+    ) or 0
+)
 
-            "RestingHR":
-                stats.get(
-                    "restingHeartRate"
-                ),
+garmin = {
 
-            "SleepHours":
-                sleep.get(
-                    "dailySleepDTO",
-                    {}
-                ).get(
-                    "sleepTimeSeconds",
-                    0
-                ) / 3600
+    "Steps":
+        stats.get(
+            "totalSteps"
+        ),
+
+    "Distance":
+        stats.get(
+            "totalDistance"
+        ),
+
+    "Calories":
+        stats.get(
+            "totalKilocalories"
+        ),
+
+    "RestingHR":
+        stats.get(
+            "restingHeartRate"
+        ),
+
+    "SleepHours":
+        round(
+            sleep_seconds / 3600,
+            2
+        )
         }
-
         # -------------------------
         # Optional Metrics
         # -------------------------
