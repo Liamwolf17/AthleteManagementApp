@@ -118,5 +118,3 @@ if st.button("Add Entry"):
             st.rerun()
     else:
         st.warning("Please fill in all fields.")
-    else:
-        st.warning("Please fill in all fields.")
