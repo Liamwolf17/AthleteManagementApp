@@ -153,8 +153,7 @@ def get_garmin_data():
 
         target_date = (
             date.today()
-            - timedelta(days=1)
-        )
+        )f
 
         date_str = target_date.strftime(
             "%Y-%m-%d"
