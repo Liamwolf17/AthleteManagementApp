@@ -98,7 +98,9 @@ def push_csv_to_github(df):
 def get_garmin_data():
 
     if not GARMIN_EMAIL or not GARMIN_PASSWORD:
-        return {}
+        return {}, {}
+
+    debug = {}
 
     try:
         from garminconnect import Garmin
@@ -138,9 +140,14 @@ def get_garmin_data():
             if stress_values:
                 garmin["AvgStress"] = sum(stress_values) / len(stress_values)
                 garmin["MaxStress"] = max(stress_values)
+            else:
+                debug["Stress"] = (
+                    "Call succeeded but returned no valid (non -1) readings "
+                    "for this date — device may not have synced stress data yet."
+                )
 
-        except:
-            pass
+        except Exception as e:
+            debug["Stress"] = f"{type(e).__name__}: {e}"
 
         try:
             body_battery = client.get_body_battery(date_str)
@@ -153,16 +160,30 @@ def get_garmin_data():
             if values:
                 garmin["BodyBatteryStart"] = values[0]
                 garmin["BodyBatteryEnd"] = values[-1]
+            else:
+                debug["BodyBattery"] = "Call succeeded but returned no values for this date."
 
-        except:
-            pass
+        except Exception as e:
+            debug["BodyBattery"] = f"{type(e).__name__}: {e}"
 
+        # VO2 Max lives under get_max_metrics(), not get_user_summary().
+        # Real response shape: {"generic": {"vo2MaxValue": 44.0, ...}, "cycling": {...}}
         try:
-            summary = client.get_user_summary(date_str)
-            garmin["VO2Max"] = summary.get("vo2MaxPreciseValue")
+            max_metrics = client.get_max_metrics(date_str)
+            generic = (max_metrics or {}).get("generic") or {}
 
-        except:
-            pass
+            if generic.get("vo2MaxValue") is not None:
+                garmin["VO2Max"] = generic.get("vo2MaxValue")
+            else:
+                debug["VO2Max"] = (
+                    "No vo2MaxValue in response — this endpoint is known to "
+                    "return empty/'latest' data inconsistently for some accounts "
+                    "and library versions, and only updates after a qualifying "
+                    "run or ride."
+                )
+
+        except Exception as e:
+            debug["VO2Max"] = f"{type(e).__name__}: {e}"
 
         # -------------------------
         # Training Readiness
@@ -178,9 +199,14 @@ def get_garmin_data():
             if isinstance(readiness, dict) and readiness:
                 garmin["TrainingReadiness"] = readiness.get("score")
                 garmin["TrainingReadinessLevel"] = readiness.get("level")
+            else:
+                debug["TrainingReadiness"] = (
+                    "Empty response — your device/account may not support "
+                    "Training Readiness (requires a compatible newer Garmin watch)."
+                )
 
-        except:
-            pass
+        except Exception as e:
+            debug["TrainingReadiness"] = f"{type(e).__name__}: {e}"
 
         # -------------------------
         # Heart Rate Variability (overnight)
@@ -194,9 +220,14 @@ def get_garmin_data():
                 garmin["HRVLastNight"] = hrv_summary.get("lastNightAvg")
                 garmin["HRVWeeklyAvg"] = hrv_summary.get("weeklyAvg")
                 garmin["HRVStatus"] = hrv_summary.get("status")
+            else:
+                debug["HRV"] = (
+                    "Empty response — your device/account may not support "
+                    "HRV Status (requires a compatible newer Garmin watch)."
+                )
 
-        except:
-            pass
+        except Exception as e:
+            debug["HRV"] = f"{type(e).__name__}: {e}"
 
         # -------------------------
         # Activities Actually Logged on the Watch
@@ -228,14 +259,14 @@ def get_garmin_data():
 
                 garmin["ActivityNames"] = ", ".join(names)
 
-        except:
-            pass
+        except Exception as e:
+            debug["Activities"] = f"{type(e).__name__}: {e}"
 
-        return garmin
+        return garmin, debug
 
     except Exception as e:
         st.warning(f"Garmin sync failed: {e}")
-        return {}
+        return {}, {"_login_or_setup": f"{type(e).__name__}: {e}"}
 
 
 # =====================================================
@@ -280,7 +311,7 @@ if not df.empty:
 
 st.header("⌚ Garmin Metrics")
 
-garmin = get_garmin_data()
+garmin, garmin_debug = get_garmin_data()
 
 if garmin:
 
@@ -323,6 +354,11 @@ if garmin:
 
     if garmin.get("ActivityNames"):
         st.caption(f"Activities: {garmin['ActivityNames']}")
+
+if garmin_debug:
+    with st.expander("🔧 Garmin debug info (why some fields may be blank)"):
+        for key, msg in garmin_debug.items():
+            st.caption(f"**{key}**: {msg}")
 
 # =====================================================
 # DAILY TRAINING FORM
