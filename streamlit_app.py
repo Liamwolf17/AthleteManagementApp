@@ -150,18 +150,39 @@ def get_garmin_data():
             debug["Stress"] = f"{type(e).__name__}: {e}"
 
         try:
-            body_battery = client.get_body_battery(date_str)
+            body_battery_data = client.get_body_battery(date_str)
 
-            values = [
-                x for x in body_battery.get("bodyBatteryValuesArray", [])
-                if isinstance(x, (int, float))
-            ]
+            # API returns a list of entries (one per day in the queried range)
+            if isinstance(body_battery_data, list) and body_battery_data:
+                body_battery_data = body_battery_data[0]
+
+            raw_values = (
+                body_battery_data.get("bodyBatteryValuesArray", [])
+                if isinstance(body_battery_data, dict)
+                else []
+            )
+
+            values = []
+
+            for entry in raw_values:
+                # entries may be plain numbers or [timestamp, value] pairs
+                v = entry[-1] if isinstance(entry, (list, tuple)) and entry else entry
+                if isinstance(v, (int, float)):
+                    values.append(v)
 
             if values:
                 garmin["BodyBatteryStart"] = values[0]
                 garmin["BodyBatteryEnd"] = values[-1]
             else:
-                debug["BodyBattery"] = "Call succeeded but returned no values for this date."
+                shape_info = (
+                    list(body_battery_data.keys())
+                    if isinstance(body_battery_data, dict)
+                    else type(body_battery_data).__name__
+                )
+                debug["BodyBattery"] = (
+                    f"Got a response but no usable numeric values found. "
+                    f"Response shape: {shape_info}"
+                )
 
         except Exception as e:
             debug["BodyBattery"] = f"{type(e).__name__}: {e}"
