@@ -106,7 +106,7 @@ def get_garmin_data():
         client = Garmin(GARMIN_EMAIL, GARMIN_PASSWORD)
         client.login()
 
-        target_date = date.today() - timedelta(days=1)
+        target_date = date.today()
         date_str = target_date.strftime("%Y-%m-%d")
 
         stats = client.get_stats(date_str)
