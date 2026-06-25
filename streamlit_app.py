@@ -206,49 +206,6 @@ def get_garmin_data():
         except Exception as e:
             debug["VO2Max"] = f"{type(e).__name__}: {e}"
 
-        # -------------------------
-        # Training Readiness
-        # -------------------------
-
-        try:
-            readiness = client.get_training_readiness(date_str)
-
-            # API returns a list of records; most recent entry is what we want
-            if isinstance(readiness, list) and readiness:
-                readiness = readiness[0]
-
-            if isinstance(readiness, dict) and readiness:
-                garmin["TrainingReadiness"] = readiness.get("score")
-                garmin["TrainingReadinessLevel"] = readiness.get("level")
-            else:
-                debug["TrainingReadiness"] = (
-                    "Empty response — your device/account may not support "
-                    "Training Readiness (requires a compatible newer Garmin watch)."
-                )
-
-        except Exception as e:
-            debug["TrainingReadiness"] = f"{type(e).__name__}: {e}"
-
-        # -------------------------
-        # Heart Rate Variability (overnight)
-        # -------------------------
-
-        try:
-            hrv = client.get_hrv_data(date_str)
-            hrv_summary = (hrv or {}).get("hrvSummary", {})
-
-            if hrv_summary:
-                garmin["HRVLastNight"] = hrv_summary.get("lastNightAvg")
-                garmin["HRVWeeklyAvg"] = hrv_summary.get("weeklyAvg")
-                garmin["HRVStatus"] = hrv_summary.get("status")
-            else:
-                debug["HRV"] = (
-                    "Empty response — your device/account may not support "
-                    "HRV Status (requires a compatible newer Garmin watch)."
-                )
-
-        except Exception as e:
-            debug["HRV"] = f"{type(e).__name__}: {e}"
 
         # -------------------------
         # Activities Actually Logged on the Watch
@@ -354,23 +311,9 @@ if garmin:
     c5, c6, c7, c8 = st.columns(4)
 
     with c5:
-        st.metric(
-            "Training Readiness",
-            garmin.get("TrainingReadiness", "-"),
-            help=garmin.get("TrainingReadinessLevel")
-        )
-
-    with c6:
-        st.metric(
-            "HRV (last night)",
-            garmin.get("HRVLastNight", "-"),
-            help=garmin.get("HRVStatus")
-        )
-
-    with c7:
         st.metric("Activities Logged", garmin.get("NumActivities", "-"))
 
-    with c8:
+    with c6:
         st.metric("Activity Duration (min)", garmin.get("ActivityDurationMin", "-"))
 
     if garmin.get("ActivityNames"):
@@ -458,13 +401,6 @@ if submitted:
         "BodyBatteryEnd": garmin.get("BodyBatteryEnd"),
         "VO2Max": garmin.get("VO2Max"),
 
-        "TrainingReadiness": garmin.get("TrainingReadiness"),
-        "TrainingReadinessLevel": garmin.get("TrainingReadinessLevel"),
-
-        "HRVLastNight": garmin.get("HRVLastNight"),
-        "HRVWeeklyAvg": garmin.get("HRVWeeklyAvg"),
-        "HRVStatus": garmin.get("HRVStatus"),
-
         "NumActivitiesGarmin": garmin.get("NumActivities"),
         "ActivityDurationMin": garmin.get("ActivityDurationMin"),
         "ActivityDistanceKm": garmin.get("ActivityDistanceKm"),
@@ -507,7 +443,7 @@ if not df.empty:
 
         cols = []
 
-        for col in ["SleepHours", "RestingHR", "HRVLastNight", "TrainingReadiness"]:
+        for col in ["SleepHours", "RestingHR"]:
             if col in plot_df:
                 cols.append(col)
 
