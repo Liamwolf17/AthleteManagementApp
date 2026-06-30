@@ -289,6 +289,13 @@ if not df.empty:
 
 st.header("⌚ Garmin Metrics")
 
+header_col, button_col = st.columns([5, 1])
+
+with button_col:
+    if st.button("🔄 Refresh", help="Force a fresh pull from Garmin (bypasses the 1-hour cache)"):
+        get_garmin_data.clear()
+        st.rerun()
+
 garmin, garmin_debug = get_garmin_data()
 
 if garmin:
@@ -318,6 +325,9 @@ if garmin:
 
     if garmin.get("ActivityNames"):
         st.caption(f"Activities: {garmin['ActivityNames']}")
+
+else:
+    st.info("No Garmin data loaded yet — fill in the fields manually below, or hit Refresh once Garmin is set up.")
 
 if garmin_debug:
     with st.expander("🔧 Garmin debug info (why some fields may be blank)"):
@@ -362,6 +372,89 @@ with st.form("training_log"):
     didnt_work = st.text_area("What Didn't Work?")
     tomorrows_focus = st.text_area("Tomorrow's Focus")
 
+    st.markdown("---")
+    st.subheader("⌚ Garmin Data")
+    st.caption(
+        "Auto-filled from Garmin above. Edit any field below to correct it or "
+        "fill it in by hand if the sync missed it."
+    )
+
+    gcol1, gcol2, gcol3, gcol4 = st.columns(4)
+
+    with gcol1:
+        m_steps = st.number_input(
+            "Steps", min_value=0, step=1,
+            value=int(garmin.get("Steps") or 0)
+        )
+        m_distance = st.number_input(
+            "Distance (m)", min_value=0.0,
+            value=float(garmin.get("Distance") or 0.0)
+        )
+
+    with gcol2:
+        m_calories = st.number_input(
+            "Calories", min_value=0, step=1,
+            value=int(garmin.get("Calories") or 0)
+        )
+        m_resting_hr = st.number_input(
+            "Resting HR", min_value=0, step=1,
+            value=int(garmin.get("RestingHR") or 0)
+        )
+
+    with gcol3:
+        m_sleep_hours = st.number_input(
+            "Sleep Hours", min_value=0.0, step=0.1, format="%.2f",
+            value=float(garmin.get("SleepHours") or 0.0)
+        )
+        m_vo2max = st.number_input(
+            "VO2 Max", min_value=0.0, step=0.1,
+            value=float(garmin.get("VO2Max") or 0.0)
+        )
+
+    with gcol4:
+        m_avg_stress = st.number_input(
+            "Avg Stress", min_value=0.0,
+            value=float(garmin.get("AvgStress") or 0.0)
+        )
+        m_max_stress = st.number_input(
+            "Max Stress", min_value=0.0,
+            value=float(garmin.get("MaxStress") or 0.0)
+        )
+
+    gcol5, gcol6, gcol7, gcol8 = st.columns(4)
+
+    with gcol5:
+        m_bb_start = st.number_input(
+            "Body Battery Start", min_value=0, max_value=100, step=1,
+            value=int(garmin.get("BodyBatteryStart") or 0)
+        )
+
+    with gcol6:
+        m_bb_end = st.number_input(
+            "Body Battery End", min_value=0, max_value=100, step=1,
+            value=int(garmin.get("BodyBatteryEnd") or 0)
+        )
+
+    with gcol7:
+        m_num_activities = st.number_input(
+            "Num Activities", min_value=0, step=1,
+            value=int(garmin.get("NumActivities") or 0)
+        )
+
+    with gcol8:
+        m_activity_duration = st.number_input(
+            "Activity Duration (min)", min_value=0.0,
+            value=float(garmin.get("ActivityDurationMin") or 0.0)
+        )
+
+    m_activity_distance = st.number_input(
+        "Activity Distance (km)", min_value=0.0,
+        value=float(garmin.get("ActivityDistanceKm") or 0.0)
+    )
+    m_activity_names = st.text_input(
+        "Activity Names", value=garmin.get("ActivityNames") or ""
+    )
+
     submitted = st.form_submit_button("Save Entry")
 
 # =====================================================
@@ -390,20 +483,24 @@ if submitted:
         "DidntWork": didnt_work,
         "TomorrowsFocus": tomorrows_focus,
 
-        "Steps": garmin.get("Steps"),
-        "Distance": garmin.get("Distance"),
-        "Calories": garmin.get("Calories"),
-        "RestingHR": garmin.get("RestingHR"),
-        "SleepHours": garmin.get("SleepHours"),
-        "AvgStress": garmin.get("AvgStress"),
-        "MaxStress": garmin.get("MaxStress"),
-        "BodyBatteryStart": garmin.get("BodyBatteryStart"),
-        "BodyBatteryEnd": garmin.get("BodyBatteryEnd"),
-        "VO2Max": garmin.get("VO2Max"),
+        # Garmin fields below come from the form inputs, which are
+        # pre-filled from the Garmin auto-sync but can be overridden
+        # or filled in manually if the sync failed.
+        "Steps": m_steps,
+        "Distance": m_distance,
+        "Calories": m_calories,
+        "RestingHR": m_resting_hr,
+        "SleepHours": m_sleep_hours,
+        "AvgStress": m_avg_stress,
+        "MaxStress": m_max_stress,
+        "BodyBatteryStart": m_bb_start,
+        "BodyBatteryEnd": m_bb_end,
+        "VO2Max": m_vo2max,
 
-        "NumActivitiesGarmin": garmin.get("NumActivities"),
-        "ActivityDurationMin": garmin.get("ActivityDurationMin"),
-        "ActivityDistanceKm": garmin.get("ActivityDistanceKm"),
+        "NumActivitiesGarmin": m_num_activities,
+        "ActivityDurationMin": m_activity_duration,
+        "ActivityDistanceKm": m_activity_distance,
+        "ActivityNames": m_activity_names,
     }])
 
     if not df.empty:
