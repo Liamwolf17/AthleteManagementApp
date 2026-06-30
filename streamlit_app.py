@@ -125,9 +125,38 @@ def get_garmin_data():
             "SleepHours": round(sleep_seconds / 3600, 2),
         }
 
+        # Intensity minutes come straight out of the same daily stats
+        # payload, no extra API call needed. Garmin counts vigorous
+        # minutes double toward the weekly intensity minutes goal.
+        moderate_min = stats.get("moderateIntensityMinutes")
+        vigorous_min = stats.get("vigorousIntensityMinutes")
+
+        garmin["ModerateIntensityMinutes"] = moderate_min
+        garmin["VigorousIntensityMinutes"] = vigorous_min
+        garmin["TotalIntensityMinutes"] = (moderate_min or 0) + (vigorous_min or 0) * 2
+
         # -------------------------
         # Optional Metrics
         # -------------------------
+
+        try:
+            sleep_score = (
+                (sleep_dto.get("sleepScores") or {})
+                .get("overall", {})
+                .get("value")
+            )
+
+            if sleep_score is not None:
+                garmin["SleepScore"] = sleep_score
+            else:
+                debug["SleepScore"] = (
+                    "No sleep score in response — only devices with advanced "
+                    "sleep tracking report this, and it may not be ready yet "
+                    "for last night's sleep."
+                )
+
+        except Exception as e:
+            debug["SleepScore"] = f"{type(e).__name__}: {e}"
 
         try:
             stress = client.get_stress_data(date_str)
@@ -318,9 +347,15 @@ if garmin:
     c5, c6, c7, c8 = st.columns(4)
 
     with c5:
-        st.metric("Activities Logged", garmin.get("NumActivities", "-"))
+        st.metric("Sleep Score", garmin.get("SleepScore", "-"))
 
     with c6:
+        st.metric("Intensity Minutes", garmin.get("TotalIntensityMinutes", "-"))
+
+    with c7:
+        st.metric("Activities Logged", garmin.get("NumActivities", "-"))
+
+    with c8:
         st.metric("Activity Duration (min)", garmin.get("ActivityDurationMin", "-"))
 
     if garmin.get("ActivityNames"):
@@ -410,6 +445,10 @@ with st.form("training_log"):
             "VO2 Max", min_value=0.0, step=0.1,
             value=float(garmin.get("VO2Max") or 0.0)
         )
+        m_sleep_score = st.number_input(
+            "Sleep Score", min_value=0, max_value=100, step=1,
+            value=int(garmin.get("SleepScore") or 0)
+        )
 
     with gcol4:
         m_avg_stress = st.number_input(
@@ -445,6 +484,20 @@ with st.form("training_log"):
         m_activity_duration = st.number_input(
             "Activity Duration (min)", min_value=0.0,
             value=float(garmin.get("ActivityDurationMin") or 0.0)
+        )
+
+    gcol9, gcol10 = st.columns(2)
+
+    with gcol9:
+        m_moderate_intensity = st.number_input(
+            "Moderate Intensity Min", min_value=0, step=1,
+            value=int(garmin.get("ModerateIntensityMinutes") or 0)
+        )
+
+    with gcol10:
+        m_vigorous_intensity = st.number_input(
+            "Vigorous Intensity Min", min_value=0, step=1,
+            value=int(garmin.get("VigorousIntensityMinutes") or 0)
         )
 
     m_activity_distance = st.number_input(
@@ -491,11 +544,15 @@ if submitted:
         "Calories": m_calories,
         "RestingHR": m_resting_hr,
         "SleepHours": m_sleep_hours,
+        "SleepScore": m_sleep_score,
         "AvgStress": m_avg_stress,
         "MaxStress": m_max_stress,
         "BodyBatteryStart": m_bb_start,
         "BodyBatteryEnd": m_bb_end,
         "VO2Max": m_vo2max,
+        "ModerateIntensityMinutes": m_moderate_intensity,
+        "VigorousIntensityMinutes": m_vigorous_intensity,
+        "TotalIntensityMinutes": m_moderate_intensity + (m_vigorous_intensity * 2),
 
         "NumActivitiesGarmin": m_num_activities,
         "ActivityDurationMin": m_activity_duration,
