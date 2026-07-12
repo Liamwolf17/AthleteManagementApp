@@ -160,19 +160,35 @@ def get_garmin_data(target_date: date):
         try:
             stress = client.get_stress_data(date_str)
 
-            stress_values = [
-                x for x in stress.get("stressValuesArray", [])
-                if isinstance(x, (int, float)) and x >= 0
-            ]
+            # Garmin computes an overall daily stress score itself — prefer
+            # that directly rather than deriving our own average/max. The
+            # exact key name has varied a bit across accounts and library
+            # versions (overallStressLevel / avgStressLevel), so check both.
+            raw_score = stress.get("overallStressLevel")
+            if raw_score in (None, -1):
+                raw_score = stress.get("avgStressLevel")
 
-            if stress_values:
-                garmin["AvgStress"] = sum(stress_values) / len(stress_values)
-                garmin["MaxStress"] = max(stress_values)
+            if raw_score not in (None, -1):
+                garmin["StressScore"] = raw_score
             else:
-                debug["Stress"] = (
-                    "Call succeeded but returned no valid (non -1) readings "
-                    "for this date — device may not have synced stress data yet."
-                )
+                # Fall back to averaging the raw per-minute readings only if
+                # Garmin didn't supply a precomputed score for this date.
+                stress_values = [
+                    x for x in stress.get("stressValuesArray", [])
+                    if isinstance(x, (int, float)) and x >= 0
+                ]
+
+                if stress_values:
+                    garmin["StressScore"] = round(sum(stress_values) / len(stress_values))
+                    debug["Stress"] = (
+                        "Garmin didn't return a precomputed daily stress score for "
+                        "this date, so this is an average of the raw readings instead."
+                    )
+                else:
+                    debug["Stress"] = (
+                        "Call succeeded but returned no valid (non -1) readings "
+                        "for this date — device may not have synced stress data yet."
+                    )
 
         except Exception as e:
             debug["Stress"] = f"{type(e).__name__}: {e}"
@@ -404,14 +420,23 @@ if garmin_debug:
 
 st.header("📝 Daily Training Log")
 
-with st.form("training_log"):
+st.write("Session Type")
+scol1, scol2 = st.columns(2)
+with scol1:
+    gym_session = st.checkbox("Gym")
+with scol2:
+    training_session = st.checkbox("Training")
 
-    st.write("Session Type")
-    scol1, scol2 = st.columns(2)
-    with scol1:
-        gym_session = st.checkbox("Gym")
-    with scol2:
-        training_session = st.checkbox("Training")
+only_gym = gym_session and not training_session
+
+if only_gym:
+    st.caption(
+        "Gym-only session — hiding the mental game, what worked/didn't, and "
+        "tomorrow's focus fields below, since those are aimed at technical/tactical "
+        "training days."
+    )
+
+with st.form("training_log"):
 
     # Feel Before: integer score + short text note
     feel_before = st.number_input(
@@ -427,19 +452,29 @@ with st.form("training_log"):
     )
     feel_after_notes = st.text_input("Feel After Notes")
 
-    # Mental Game: integer score + short text note
-    mental_game = st.number_input(
-        "Mental Game (score)",
-        min_value=1, max_value=10, value=5, step=1, format="%d"
-    )
-    mental_game_notes = st.text_input("Mental Game Notes")
+    # Mental Game: integer score + short text note (skipped for gym-only days)
+    if not only_gym:
+        mental_game = st.number_input(
+            "Mental Game (score)",
+            min_value=1, max_value=10, value=5, step=1, format="%d"
+        )
+        mental_game_notes = st.text_input("Mental Game Notes")
+    else:
+        mental_game = None
+        mental_game_notes = ""
 
     intensity = st.slider("Training Intensity", 1, 10, 5)
 
     focus = st.text_input("Today's Focus")
-    worked_well = st.text_area("What Worked Well?")
-    didnt_work = st.text_area("What Didn't Work?")
-    tomorrows_focus = st.text_area("Tomorrow's Focus")
+
+    if not only_gym:
+        worked_well = st.text_area("What Worked Well?")
+        didnt_work = st.text_area("What Didn't Work?")
+        tomorrows_focus = st.text_area("Tomorrow's Focus")
+    else:
+        worked_well = ""
+        didnt_work = ""
+        tomorrows_focus = ""
 
     st.markdown("---")
     st.subheader("⌚ Garmin Data")
@@ -447,6 +482,7 @@ with st.form("training_log"):
         "Auto-filled from Garmin above. Edit any field below to correct it or "
         "fill it in by hand if the sync missed it."
     )
+
 
     gcol1, gcol2, gcol3, gcol4 = st.columns(4)
 
@@ -485,13 +521,9 @@ with st.form("training_log"):
         )
 
     with gcol4:
-        m_avg_stress = st.number_input(
-            "Avg Stress", min_value=0.0,
-            value=float(garmin.get("AvgStress") or 0.0)
-        )
-        m_max_stress = st.number_input(
-            "Max Stress", min_value=0.0,
-            value=float(garmin.get("MaxStress") or 0.0)
+        m_stress_score = st.number_input(
+            "Stress Score", min_value=0.0,
+            value=float(garmin.get("StressScore") or 0.0)
         )
 
     gcol5, gcol6, gcol7, gcol8 = st.columns(4)
@@ -583,8 +615,7 @@ if submitted:
         "RestingHR": m_resting_hr,
         "SleepHours": m_sleep_hours,
         "SleepScore": m_sleep_score,
-        "AvgStress": m_avg_stress,
-        "MaxStress": m_max_stress,
+        "StressScore": m_stress_score,
         "BodyBatteryStart": m_bb_start,
         "BodyBatteryEnd": m_bb_end,
         "VO2Max": m_vo2max,
