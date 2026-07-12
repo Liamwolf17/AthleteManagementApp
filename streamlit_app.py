@@ -428,53 +428,71 @@ with scol2:
     training_session = st.checkbox("Training")
 
 only_gym = gym_session and not training_session
+rest_day = not gym_session and not training_session
 
-if only_gym:
+if rest_day:
     st.caption(
-        "Gym-only session — hiding the mental game, what worked/didn't, and "
-        "tomorrow's focus fields below, since those are aimed at technical/tactical "
-        "training days."
+        "No session ticked — treating this as a rest day. Only Feel Before/After "
+        "and Tomorrow's Focus are shown below."
+    )
+elif only_gym:
+    st.caption(
+        "Gym-only session — hiding the mental game and what worked/didn't fields "
+        "below, since those are aimed at technical/tactical training days."
     )
 
 with st.form("training_log"):
 
-    # Feel Before: integer score + short text note
+    # Feel Before: integer score + short text note (always shown)
     feel_before = st.number_input(
         "Feel Before Training (score)",
         min_value=1, max_value=10, value=5, step=1, format="%d"
     )
     feel_before_notes = st.text_input("Feel Before Notes")
 
-    # Feel After: integer score + short text note
+    # Feel After: integer score + short text note (always shown)
     feel_after = st.number_input(
         "Feel After Training (score)",
         min_value=1, max_value=10, value=5, step=1, format="%d"
     )
     feel_after_notes = st.text_input("Feel After Notes")
 
-    # Mental Game: integer score + short text note (skipped for gym-only days)
-    if not only_gym:
-        mental_game = st.number_input(
-            "Mental Game (score)",
-            min_value=1, max_value=10, value=5, step=1, format="%d"
-        )
-        mental_game_notes = st.text_input("Mental Game Notes")
+    # Mental Game, Intensity, Today's Focus, Worked Well / Didn't Work are all
+    # training-specific and are skipped entirely on rest days.
+    if not rest_day:
+
+        # Mental Game: skipped for gym-only days, shown when Training is ticked
+        if training_session:
+            mental_game = st.number_input(
+                "Mental Game (score)",
+                min_value=1, max_value=10, value=5, step=1, format="%d"
+            )
+            mental_game_notes = st.text_input("Mental Game Notes")
+        else:
+            mental_game = None
+            mental_game_notes = ""
+
+        intensity = st.slider("Training Intensity", 1, 10, 5)
+        focus = st.text_input("Today's Focus")
+
+        if training_session:
+            worked_well = st.text_area("What Worked Well?")
+            didnt_work = st.text_area("What Didn't Work?")
+        else:
+            worked_well = ""
+            didnt_work = ""
+
     else:
         mental_game = None
         mental_game_notes = ""
-
-    intensity = st.slider("Training Intensity", 1, 10, 5)
-
-    focus = st.text_input("Today's Focus")
-
-    if not only_gym:
-        worked_well = st.text_area("What Worked Well?")
-        didnt_work = st.text_area("What Didn't Work?")
-        tomorrows_focus = st.text_area("Tomorrow's Focus")
-    else:
+        intensity = None
+        focus = ""
         worked_well = ""
         didnt_work = ""
-        tomorrows_focus = ""
+
+    # Tomorrow's Focus is always shown, regardless of session type — it drives
+    # the "Planned Focus" reminder shown on the following day's entry.
+    tomorrows_focus = st.text_area("Tomorrow's Focus")
 
     st.markdown("---")
     st.subheader("⌚ Garmin Data")
