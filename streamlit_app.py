@@ -52,7 +52,7 @@ def get_existing_csv():
     return pd.DataFrame()
 
 
-def push_csv_to_github(df):
+def push_csv_to_github(df, entry_date_str):
 
     if not GITHUB_TOKEN:
         st.error("No GitHub token configured.")
@@ -73,7 +73,7 @@ def push_csv_to_github(df):
         sha = r.json().get("sha")
 
     payload = {
-        "message": f"Update athlete log {date.today()}",
+        "message": f"Update athlete log {entry_date_str}",
         "content": b64_content,
         "branch": BRANCH
     }
@@ -95,7 +95,7 @@ def push_csv_to_github(df):
 # =====================================================
 
 @st.cache_data(ttl=3600)
-def get_garmin_data():
+def get_garmin_data(target_date: date):
 
     if not GARMIN_EMAIL or not GARMIN_PASSWORD:
         return {}, {}
@@ -108,7 +108,6 @@ def get_garmin_data():
         client = Garmin(GARMIN_EMAIL, GARMIN_PASSWORD)
         client.login()
 
-        target_date = date.today()
         date_str = target_date.strftime("%Y-%m-%d")
 
         stats = client.get_stats(date_str)
@@ -152,7 +151,7 @@ def get_garmin_data():
                 debug["SleepScore"] = (
                     "No sleep score in response — only devices with advanced "
                     "sleep tracking report this, and it may not be ready yet "
-                    "for last night's sleep."
+                    "for that night's sleep."
                 )
 
         except Exception as e:
@@ -218,6 +217,9 @@ def get_garmin_data():
 
         # VO2 Max lives under get_max_metrics(), not get_user_summary().
         # Real response shape: {"generic": {"vo2MaxValue": 44.0, ...}, "cycling": {...}}
+        # NOTE: this endpoint is known to sometimes return the *latest* VO2max
+        # regardless of the date_str you pass in, rather than a true historical
+        # value for that specific day — treat backfilled VO2Max with caution.
         try:
             max_metrics = client.get_max_metrics(date_str)
             generic = (max_metrics or {}).get("generic") or {}
@@ -289,10 +291,37 @@ df = get_existing_csv()
 st.title("🏆 Athlete Management App")
 
 # =====================================================
-# YESTERDAY'S FOCUS
+# ENTRY DATE SELECTION (backfill support)
 # =====================================================
 
-st.header("🎯 Yesterday's Focus")
+entry_date_obj = st.date_input(
+    "Which day are you logging?",
+    value=date.today(),
+    max_value=date.today()
+)
+entry_date_str = str(entry_date_obj)
+
+days_back = (date.today() - entry_date_obj).days
+
+if days_back == 0:
+    date_choice = "Today"
+elif days_back == 1:
+    date_choice = "Yesterday"
+else:
+    date_choice = entry_date_obj.strftime("%A, %B %d")
+
+if days_back != 0:
+    st.caption(
+        f"Backfilling **{entry_date_str}**. Garmin metrics below are pulled "
+        f"for that specific date — most fields honor this, but VO2Max can "
+        f"lag or return the most recent value regardless of date (see debug panel)."
+    )
+
+# =====================================================
+# PLANNED FOCUS (reminder from the day before the entry date)
+# =====================================================
+
+st.header(f"🎯 Planned Focus for {date_choice}")
 
 if not df.empty:
 
@@ -300,23 +329,23 @@ if not df.empty:
         temp_df = df.copy()
         temp_df["Date"] = pd.to_datetime(temp_df["Date"])
 
-        yesterday = (pd.Timestamp.today() - pd.Timedelta(days=1)).date()
+        prior_day = entry_date_obj - timedelta(days=1)
 
-        yest = temp_df[temp_df["Date"].dt.date == yesterday]
+        prior_entry = temp_df[temp_df["Date"].dt.date == prior_day]
 
-        if not yest.empty:
-            st.info(yest.iloc[0]["TomorrowsFocus"])
+        if not prior_entry.empty:
+            st.info(prior_entry.iloc[0]["TomorrowsFocus"])
         else:
             st.info("No focus recorded.")
 
-    except:
+    except Exception:
         pass
 
 # =====================================================
 # GARMIN METRICS
 # =====================================================
 
-st.header("⌚ Garmin Metrics")
+st.header(f"⌚ Garmin Metrics — {date_choice} ({entry_date_str})")
 
 header_col, button_col = st.columns([5, 1])
 
@@ -325,7 +354,7 @@ with button_col:
         get_garmin_data.clear()
         st.rerun()
 
-garmin, garmin_debug = get_garmin_data()
+garmin, garmin_debug = get_garmin_data(entry_date_obj)
 
 if garmin:
 
@@ -377,7 +406,12 @@ st.header("📝 Daily Training Log")
 
 with st.form("training_log"):
 
-    num_sessions = st.number_input("Number of Sessions", 0, 10, 1)
+    st.write("Session Type")
+    scol1, scol2 = st.columns(2)
+    with scol1:
+        gym_session = st.checkbox("Gym")
+    with scol2:
+        training_session = st.checkbox("Training")
 
     # Feel Before: integer score + short text note
     feel_before = st.number_input(
@@ -516,10 +550,14 @@ with st.form("training_log"):
 
 if submitted:
 
+    gym_bool = bool(gym_session)
+    training_bool = bool(training_session)
+
     new_entry = pd.DataFrame([{
 
-        "Date": str(date.today()),
-        "NumSessions": num_sessions,
+        "Date": entry_date_str,
+        "Gym": gym_bool,
+        "Training": training_bool,
 
         "FeelBefore": feel_before,
         "FeelBeforeNotes": feel_before_notes,
@@ -561,12 +599,12 @@ if submitted:
     }])
 
     if not df.empty:
-        df = df[df["Date"] != str(date.today())]
+        df = df[df["Date"] != entry_date_str]
 
     df = pd.concat([df, new_entry], ignore_index=True)
 
-    if push_csv_to_github(df):
-        st.success("Entry saved!")
+    if push_csv_to_github(df, entry_date_str):
+        st.success(f"Entry saved for {entry_date_str} ({date_choice})!")
         st.rerun()
 
 # =====================================================
